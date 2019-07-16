@@ -51,6 +51,7 @@ namespace RabbitScheduler.Processor
                 var task = _mongoDbContext.Collection<Task>().Find(n => n.Id == taskId).SingleOrDefault();
                 if (task == null || task.Status != TaskStatus.Normal)
                 {
+                    _channel.BasicAck(ea.DeliveryTag, false);
                     return;
                 }
 

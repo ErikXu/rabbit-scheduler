@@ -5,13 +5,16 @@ using System.Text;
 using System.Threading.Tasks;
 using Connector;
 using Microsoft.AspNetCore.Mvc;
+using MongoDB.Bson;
+using MongoDB.Driver;
 using RabbitMQ.Client;
 using RabbitScheduler.WebApi.Models;
 using Task = Connector.Task;
+using TaskStatus = Connector.TaskStatus;
 
 namespace RabbitScheduler.WebApi.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/tasks")]
     [ApiController]
     public class TasksController : ControllerBase
     {
@@ -49,7 +52,7 @@ namespace RabbitScheduler.WebApi.Controllers
                 var sendTime = startTime;
                 if (sendTime <= endTime && sendTime > DateTime.UtcNow)
                 {
-                    task.SubTasks.Add(new SubTask { SendTime = sendTime });
+                    task.SubTasks.Add(new SubTask { Id = ObjectId.GenerateNewId(), SendTime = sendTime });
                 }
 
                 startTime = startTime.AddMinutes(task.Interval);
@@ -94,6 +97,26 @@ namespace RabbitScheduler.WebApi.Controllers
             }
 
             return Ok();
+        }
+
+        /// <summary>
+        /// 撤销任务
+        /// </summary>
+        /// <param name="id"></param>
+        /// <returns></returns>
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> Cancel([FromRoute]string id)
+        {
+            var taskId = new ObjectId(id);
+            var task = await _mongoDbContext.Collection<Task>().Find(n => n.Id == taskId).SingleOrDefaultAsync();
+            if (task == null)
+            {
+                return NotFound(new { message = "任务不存在！" });
+            }
+
+            task.Status = TaskStatus.Canceled;
+            await _mongoDbContext.Collection<Task>().FindOneAndReplaceAsync(n => n.Id == taskId, task);
+            return NoContent();
         }
     }
 }
